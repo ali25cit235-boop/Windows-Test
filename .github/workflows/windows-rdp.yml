@@ -1,0 +1,47 @@
+name: Windows RDP via ngrok
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rdp:
+    runs-on: windows-latest
+    timeout-minutes: 350   # GitHub free runners max out around 6 hours anyway
+    steps:
+      - name: Set Administrator password
+        shell: powershell
+        run: |
+          $Password = "${{ secrets.RDP_PASSWORD }}"
+          net user runneradmin $Password /add
+          net localgroup administrators runneradmin /add
+          Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+      - name: Download and install ngrok
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+          Expand-Archive -Path "ngrok.zip" -DestinationPath "C:\ngrok"
+          C:\ngrok\ngrok.exe config add-authtoken ${{ secrets.NGROK_AUTHTOKEN }}
+
+      - name: Start ngrok TCP tunnel for RDP (port 3389)
+        shell: powershell
+        run: |
+          Start-Process -FilePath "C:\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -WindowStyle Hidden
+          Start-Sleep -Seconds 10
+
+      - name: Get ngrok public address
+        shell: powershell
+        run: |
+          $tunnels = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
+          $publicUrl = $tunnels.tunnels[0].public_url
+          Write-Host "=================================================="
+          Write-Host "Connect using this address (Remote Desktop Connection):"
+          Write-Host $publicUrl -ForegroundColor Green
+          Write-Host "Username: runneradmin"
+          Write-Host "=================================================="
+
+      - name: Keep session alive
+        shell: powershell
+        run: |
+          Start-Sleep -Seconds 20000   # ~5.5 hours, adjust as needed
