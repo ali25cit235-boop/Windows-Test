@@ -11,25 +11,24 @@ jobs:
       - name: Set Administrator password
         shell: powershell
         run: |
-          $Password = "${{ secrets.RDP_PASSWORD }}"
+          $Password = "TestRdp@2026!Strong"
           $UserExists = Get-LocalUser -Name "runneradmin" -ErrorAction SilentlyContinue
 
           if ($UserExists) {
-            # Account already exists on the windows-latest image, just reset its password
             net user runneradmin $Password
+            $global:LASTEXITCODE = 0
           } else {
             net user runneradmin $Password /add
+            $global:LASTEXITCODE = 0
             net localgroup administrators runneradmin /add
+            $global:LASTEXITCODE = 0
           }
 
-          # Make sure it's an admin either way (ignore error if already a member)
-          net localgroup administrators runneradmin /add 2>$null
+          net localgroup administrators runneradmin /add
+          $global:LASTEXITCODE = 0
 
           Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-
-          # Prevent PowerShell from failing the step on non-terminating command errors above
-          $LASTEXITCODE = 0
           exit 0
 
       - name: Download and install ngrok
